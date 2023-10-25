@@ -6,8 +6,11 @@
 #
 #    http://shiny.rstudio.com/
 #
+#  2023 October:  attempting to add shinymeta to the app for reproducibility**
 
-library(shiny)
+library(shiny) 
+library(tidyverse)
+library(shinymeta)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -45,7 +48,9 @@ ui <- fluidPage(
       # Show a plot of the generated distribution
       mainPanel(
          plotOutput("rwPlot"),
-         HTML("Imagine a version of the Pavlov experiment in which a tone (CS1 - conditioned stimulus #1) and a light (CS2 - conditioned stimulus #2) are both presented right before the dog is given food (US - unconditioned stimulus).  The association strength on the Y axis represents the amount of response to a stimulus; you could think of it as the amount of salivation.  Lambda (the green line) is the strength of the response to the US - the amount of salivation resulting from the food.  This represents the UR (unconditioned response) and is the maximum total associative strength possible.  CR1 (the red line) is the conditioned response to CS1 - the amount of salivation resulting from the tone.  CR2 (the blue line) is the conditioned response to CS2 - the amount of salivation resulting from the light.")
+         HTML("Imagine a version of the Pavlov experiment in which a tone (CS1 - conditioned stimulus #1) and a light (CS2 - conditioned stimulus #2) are both presented right before the dog is given food (US - unconditioned stimulus).  The association strength on the Y axis represents the amount of response to a stimulus; you could think of it as the amount of salivation.  Lambda (the green line) is the strength of the response to the US - the amount of salivation resulting from the food.  This represents the UR (unconditioned response) and is the maximum total associative strength possible.  CR1 (the red line) is the conditioned response to CS1 - the amount of salivation resulting from the tone.  CR2 (the blue line) is the conditioned response to CS2 - the amount of salivation resulting from the light."),
+         HTML("<p><h4>CODE to reproduce figure</h4></p>"),
+         verbatimTextOutput("code") 
       )
    )
 )
@@ -62,17 +67,25 @@ update_RW <- function(value, alpha=.3, beta=.3, lambda=1) {
 
 server <- function(input, output) {
   values <- reactiveValues(rwValues = matrix(rep(0, 2), nrow = 1, ncol = 2))
-  observeEvent(input$nextTrial,  {
-    trial <- nrow(values$rwValues)
-    newValues <- update_RW(values$rwValues[trial,], alpha=c(input$alpha1, input$alpha2), beta=input$beta, lambda=input$lambda)
-    values$rwValues <- rbind(values$rwValues, newValues)     
+  metatrials <- metaObserve({
+    input$nextTrial  
+    if(input$nextTrial != 0) isolate({
+      trial <- nrow(values$rwValues)
+      newValues <- update_RW(values$rwValues[trial,], alpha=c(input$alpha1, input$alpha2), beta=input$beta, lambda=input$lambda)
+      values$rwValues <- rbind(values$rwValues, newValues)     
+    })
   })
-  output$rwPlot <- renderPlot({
-    plot(values$rwValues[,1], type="o", pch="X", col="red", ylab="Association Strength", 
+  output$rwPlot <- metaRender2(renderPlot,{
+   metaExpr({
+     plot(..(values$rwValues[,1]), type="o", pch="X", col="red", ylab="Association Strength", 
          xlab="Trial",   ylim=c(-1,1), 
          main="Response strength for the US (green line), CS1 (red), and CS2 (blue) on each learning trial ")
-    lines(values$rwValues[,2], type="b", col="blue")
-    abline(h=input$lambda, col = "green")
+    lines(..(values$rwValues[,2]), type="b", col="blue")
+    abline(h=..(input$lambda), col = "green")
+   })
+  })
+  output$code <- renderPrint({
+     expandChain(output$rwPlot())
   })
 }
 
